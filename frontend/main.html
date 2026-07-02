@@ -1,17 +1,948 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="main.css">
-    <title>GO-Playing-Agent</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mini-Go (5x5)</title>
+  <style>
+    :root {
+      --bg: #f4efe6;
+      --panel: rgba(255, 255, 255, 0.82);
+      --panel-border: rgba(0, 0, 0, 0.08);
+      --board: #efc98b;
+      --line: #352717;
+      --text: #171717;
+      --muted: #6b7280;
+      --black: #111111;
+      --white: #f8f8f8;
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { min-height: 100%; }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #fff8ec 0%, var(--bg) 45%, #e9dfcf 100%);
+      color: var(--text);
+    }
+
+    button { font: inherit; }
+
+    .app {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 22px;
+    }
+
+    .title-wrap h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      letter-spacing: -0.04em;
+    }
+
+    .title-wrap p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 1.02rem;
+    }
+
+    .counter {
+      margin: 0;
+      padding: 12px 18px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--panel-border);
+      box-shadow: var(--shadow);
+      font-size: 1rem;
+      white-space: nowrap;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(540px, 1fr) 320px;
+      gap: 22px;
+      align-items: start;
+    }
+
+    .board-shell,
+    .sidebar-card,
+    .modal-card {
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--panel-border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .board-shell { padding: 22px; }
+
+    .board-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .status {
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .board-area {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      border-radius: 22px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.14), rgba(0,0,0,0.03)),
+        linear-gradient(90deg, rgba(0,0,0,0.03), rgba(255,255,255,0.03)),
+        var(--board);
+      border: 1px solid rgba(79, 52, 18, 0.18);
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.18),
+        inset 0 -18px 40px rgba(0,0,0,0.08);
+      --pad: 10%;
+      --step: 20%;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    .grid-line {
+      position: absolute;
+      background: rgba(53, 39, 23, 0.92);
+      pointer-events: none;
+    }
+
+    .grid-line.h {
+      left: var(--pad);
+      width: calc(100% - (var(--pad) * 2));
+      height: 2px;
+      transform: translateY(-50%);
+    }
+
+    .grid-line.v {
+      top: var(--pad);
+      height: calc(100% - (var(--pad) * 2));
+      width: 2px;
+      transform: translateX(-50%);
+    }
+
+    .intersection-mark {
+      position: absolute;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: rgba(28, 20, 12, 0.9);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      opacity: 0.9;
+    }
+
+    .stone-layer,
+    .point-layer {
+      position: absolute;
+      inset: 0;
+    }
+
+    .point {
+      position: absolute;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      margin: 0;
+      border: 0;
+      background: transparent;
+      transform: translate(-50%, -50%);
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      outline: none;
+      touch-action: manipulation;
+    }
+
+    .point::before {
+      content: "";
+      position: absolute;
+      inset: 50% auto auto 50%;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(28, 20, 12, 0.34);
+      transform: translate(-50%, -50%);
+      opacity: 0.65;
+      transition: opacity 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
+    }
+
+    .point:hover::before,
+    .point:focus-visible::before {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.15);
+      box-shadow: 0 0 0 7px rgba(37, 99, 235, 0.12);
+    }
+
+    .point:focus-visible { outline: none; }
+
+    .point:disabled {
+      cursor: not-allowed;
+      opacity: 1;
+    }
+
+    .stone {
+      position: absolute;
+      width: 15.5%;
+      aspect-ratio: 1 / 1;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      will-change: transform;
+      box-shadow:
+        inset 0 4px 12px rgba(255,255,255,0.22),
+        inset 0 -10px 18px rgba(0,0,0,0.28),
+        0 10px 18px rgba(0,0,0,0.20);
+    }
+
+    .stone.black {
+      background: radial-gradient(circle at 28% 28%, #4d4d4d 0%, #171717 34%, #050505 100%);
+    }
+
+    .stone.white {
+      background: radial-gradient(circle at 28% 28%, #ffffff 0%, #f2f2f2 36%, #d8d8d8 100%);
+    }
+
+    .sidebar {
+      display: grid;
+      gap: 16px;
+    }
+
+    .sidebar-card { padding: 18px; }
+
+    .sidebar-card h2 {
+      margin: 0 0 12px;
+      font-size: 1.1rem;
+    }
+
+    .stat {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+      color: #374151;
+      align-items: center;
+    }
+
+    .stat:last-child { border-bottom: 0; }
+
+    .turn-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid rgba(0,0,0,0.06);
+      font-weight: 600;
+    }
+
+    .dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+
+    .dot.black { background: #111; }
+    .dot.white { background: #f3f3f3; border: 1px solid rgba(0,0,0,0.08); }
+
+    .btn-row {
+      display: grid;
+      gap: 10px;
+    }
+
+    button.action {
+      border: 0;
+      border-radius: 16px;
+      padding: 13px 16px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    }
+
+    button.action:hover { transform: translateY(-1px); }
+    button.action:active { transform: translateY(0px); }
+
+    .primary {
+      background: linear-gradient(180deg, #1f2937, #111827);
+      color: white;
+      box-shadow: 0 10px 22px rgba(17, 24, 39, 0.25);
+    }
+
+    .secondary {
+      background: rgba(255,255,255,0.92);
+      color: #111827;
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+
+    .log {
+      min-height: 88px;
+      color: #4b5563;
+      line-height: 1.5;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(17, 24, 39, 0.58);
+      z-index: 50;
+    }
+
+    .modal.open { display: flex; }
+
+    .modal-card {
+      width: min(520px, 100%);
+      padding: 22px;
+    }
+
+    .modal-card h2 {
+      margin: 0 0 8px;
+      font-size: 1.7rem;
+      letter-spacing: -0.03em;
+    }
+
+    .modal-card p {
+      margin: 0 0 18px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .choice-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    
+    .choice-row2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .choice {
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 18px;
+      padding: 16px;
+      background: rgba(255,255,255,0.9);
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      text-align: left;
+    }
+
+    .choice:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 22px rgba(0,0,0,0.08);
+    }
+
+    .choice strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 1.05rem;
+    }
+
+    .choice span {
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 1040px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      .app { padding: 16px; }
+      .header { flex-direction: column; }
+      .board-shell { padding: 14px; }
+      .sidebar-card { padding: 14px; }
+      .point { width: 28px; height: 28px; }
+      .stone { width: 16.5%; }
+      .choice-row { grid-template-columns: 1fr; }
+      .choice-row2 { grid-template-columns: 1fr; }
+    }
+  </style>
 </head>
 <body>
-    <h1 class="counter">Move Counter: 0</h1>
+  <div class="modal open" id="startModal" aria-modal="true" role="dialog">
+    <div class="modal-card">
+      <h2>Choose your side</h2>
+      <p>Pick Black to move first, White to let the AI start, or Play Solo for local two-sided play in the browser.</p>
+      <div class="choice-row">
+        <button class="choice" id="chooseBlack">
+          <strong>Black</strong>
+          <span>You go first. The AI plays White after each of your moves.</span>
+        </button>
+        <button class="choice" id="chooseWhite">
+          <strong>White</strong>
+          <span>The AI goes first as Black, then you respond as White.</span>
+        </button>
+        <button class="choice" id="chooseSolo">
+          <strong>Play Solo</strong>
+          <span>Local play only. No Python backend or AI replies.</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
-    
+  <div class="modal" id="endModal" aria-modal="true" role="dialog">
+    <div class="modal-card">
+      <h2 id="finalTitle">Game Over</h2>
+      <p id="finalSummary">Final score</p>
+      <div class="choice-row2">
+        <button class="choice" id="playAgainBtn">
+          <strong>Play Again</strong>
+          <span>Return to the opening choice screen and start a new game.</span>
+        </button>
+        <button class="choice" id="closeResultBtn">
+          <strong>Close</strong>
+          <span>Keep the final result visible and inspect the board.</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
-    
+  <main class="app">
+    <section class="header">
+      <div class="title-wrap">
+        <h1>Mini-Go (5x5)</h1>
+        <p>Click an empty intersection to place a stone. Captures, suicide, ko, and AI replies are handled by the Python backend.</p>
+      </div>
+      <div class="counter" id="moveCounter">Move Counter: 0</div>
+    </section>
+
+    <section class="layout">
+      <div class="board-shell">
+        <div class="board-top">
+          <div>
+            <div class="status" id="turnText">Waiting to start</div>
+            <div class="hint">Board coordinates are A–E and 1–5.</div>
+          </div>
+          <div class="hint" id="lastMove">Last move: none</div>
+        </div>
+
+        <div class="board-area" id="board" aria-label="5x5 Go board" role="grid"></div>
+      </div>
+
+      <aside class="sidebar">
+        <div class="sidebar-card">
+          <h2>Game Info</h2>
+          <div class="stat"><span>Board Size</span><strong>5x5</strong></div>
+          <div class="stat"><span>Rules</span><strong>Standard Go</strong></div>
+          <div class="stat"><span>Turn</span><strong id="sidebarTurn">Not started</strong></div>
+          <div class="stat"><span>Komi</span><strong>White +2.5</strong></div>
+        </div>
+
+        <div class="sidebar-card">
+          <h2>Captured Stones</h2>
+          <div class="stat"><span><span class="dot black"></span> Black</span><strong id="capturedBlack">0</strong></div>
+          <div class="stat"><span><span class="dot white"></span> White</span><strong id="capturedWhite">0</strong></div>
+        </div>
+
+        <div class="sidebar-card btn-row">
+          <button class="action primary" id="undoBtn">Undo Move</button>
+          <button class="action secondary" id="resetBtn">Reset Game</button>
+        </div>
+
+        <div class="sidebar-card">
+          <h2>Game Result</h2>
+          <div class="log" id="resultText">Game not started.</div>
+        </div>
+
+        <div class="sidebar-card">
+          <h2>How to use</h2>
+          <div class="log" id="logText">Choose a side to begin.</div>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  
+  <script>
+    const BOARD_SIZE = 5;
+    const KOMI = 2.5;
+    const EMPTY = 0;
+    const BLACK = 1;
+    const WHITE = 2;
+    const MAX_MOVES = 24;
+    const letters = ["A", "B", "C", "D", "E"];
+    const API_BASE = "http://127.0.0.1:8000";
+
+    const boardEl = document.getElementById("board");
+    const moveCounterEl = document.getElementById("moveCounter");
+    const turnTextEl = document.getElementById("turnText");
+    const sidebarTurnEl = document.getElementById("sidebarTurn");
+    const lastMoveEl = document.getElementById("lastMove");
+    const resultTextEl = document.getElementById("resultText");
+    const logTextEl = document.getElementById("logText");
+    const capturedBlackEl = document.getElementById("capturedBlack");
+    const capturedWhiteEl = document.getElementById("capturedWhite");
+    const undoBtn = document.getElementById("undoBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const startModal = document.getElementById("startModal");
+    const chooseBlack = document.getElementById("chooseBlack");
+    const chooseWhite = document.getElementById("chooseWhite");
+    const chooseSolo = document.getElementById("chooseSolo");
+    const endModal = document.getElementById("endModal");
+    const finalTitle = document.getElementById("finalTitle");
+    const finalSummary = document.getElementById("finalSummary");
+    const playAgainBtn = document.getElementById("playAgainBtn");
+    const closeResultBtn = document.getElementById("closeResultBtn");
+
+    function makeInitialState() {
+      return {
+        board: Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(EMPTY)),
+        previousBoard: null,
+        currentPlayer: BLACK,
+        moveCounter: 0,
+        capturedBlack: 0,
+        capturedWhite: 0,
+        gameOver: false,
+        lastMove: "none",
+        resultText: "Game not started.",
+        mode: "solo",
+        humanColor: null,
+        aiColor: null,
+        history: [],
+        blackScore: 0,
+        whiteScore: KOMI,
+      };
+    }
+
+    let state = makeInitialState();
+    let gameStarted = false;
+
+    function playerName(player) {
+      return player === BLACK ? "Black" : "White";
+    }
+
+    function coordName(row, col) {
+      return `${letters[col]}${BOARD_SIZE - row}`;
+    }
+
+    function cloneBoard(src) {
+      return src.map(row => row.slice());
+    }
+
+    function boardsEqual(a, b) {
+      if (!a || !b) return false;
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          if (a[r][c] !== b[r][c]) return false;
+        }
+      }
+      return true;
+    }
+
+    function setMessage(message) {
+      logTextEl.textContent = message;
+    }
+
+    function showStartModal(show) {
+      startModal.classList.toggle("open", show);
+    }
+
+    function showEndModal(show) {
+      endModal.classList.toggle("open", show);
+    }
+
+    function isOnlineMode() {
+      return state.mode === "online";
+    }
+
+    function opposite(color) {
+      return color === BLACK ? WHITE : BLACK;
+    }
+
+    function inBounds(row, col) {
+      return row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE;
+    }
+
+    function neighbors(row, col) {
+      return [
+        [row - 1, col],
+        [row + 1, col],
+        [row, col - 1],
+        [row, col + 1],
+      ].filter(([r, c]) => inBounds(r, c));
+    }
+
+    function getGroup(board, row, col) {
+      const color = board[row][col];
+      const stack = [[row, col]];
+      const visited = new Set();
+      const group = [];
+      let hasLiberty = false;
+
+      while (stack.length) {
+        const [r, c] = stack.pop();
+        const key = `${r},${c}`;
+        if (visited.has(key)) continue;
+        visited.add(key);
+        group.push([r, c]);
+
+        for (const [nr, nc] of neighbors(r, c)) {
+          if (board[nr][nc] === EMPTY) {
+            hasLiberty = true;
+          } else if (board[nr][nc] === color) {
+            stack.push([nr, nc]);
+          }
+        }
+      }
+
+      return { group, hasLiberty };
+    }
+
+    function resolveCaptures(board, row, col, playerColor) {
+      const oppColor = opposite(playerColor);
+      const captured = [];
+      const seen = new Set();
+
+      for (const [nr, nc] of neighbors(row, col)) {
+        if (board[nr][nc] !== oppColor) continue;
+        const key = `${nr},${nc}`;
+        if (seen.has(key)) continue;
+        const { group, hasLiberty } = getGroup(board, nr, nc);
+        for (const [gr, gc] of group) seen.add(`${gr},${gc}`);
+        if (!hasLiberty) captured.push(...group);
+      }
+
+      return captured;
+    }
+
+    function countCapturedForScore() {
+      return {
+        blackScore: state.capturedWhite,
+        whiteScore: state.capturedBlack + KOMI,
+      };
+    }
+
+    function finishGame() {
+      const { blackScore, whiteScore } = countCapturedForScore();
+      state.blackScore = blackScore;
+      state.whiteScore = whiteScore;
+      state.gameOver = true;
+
+      const diff = Math.abs(blackScore - whiteScore).toFixed(1);
+      if (blackScore > whiteScore) {
+        state.resultText = `Game over. Black wins ${blackScore.toFixed(1)} to ${whiteScore.toFixed(1)} by ${diff}.`;
+      } else if (whiteScore > blackScore) {
+        state.resultText = `Game over. White wins ${whiteScore.toFixed(1)} to ${blackScore.toFixed(1)} by ${diff}.`;
+      } else {
+        state.resultText = `Game over. The game is a tie at ${blackScore.toFixed(1)}.`;
+      }
+
+      finalTitle.textContent = 'Game Over';
+      finalSummary.textContent = `${state.resultText} Captures only, with White komi included.`;
+      showEndModal(true);
+      updateUI();
+    }
+
+    function updateUI() {
+      moveCounterEl.textContent = state.gameOver ? `Move Counter: ${state.moveCounter} (final)` : `Move Counter: ${state.moveCounter}`;
+      turnTextEl.textContent = state.gameOver ? "Game over" : (gameStarted ? `${playerName(state.currentPlayer)} to move` : "Waiting to start");
+      sidebarTurnEl.textContent = state.gameOver ? "Ended" : (gameStarted ? playerName(state.currentPlayer) : "Not started");
+      lastMoveEl.textContent = `Last move: ${state.lastMove || "none"}`;
+      capturedBlackEl.textContent = state.capturedBlack ?? 0;
+      capturedWhiteEl.textContent = state.capturedWhite ?? 0;
+      resultTextEl.textContent = state.gameOver ? state.resultText : (gameStarted ? state.resultText : "Game not started.");
+      undoBtn.disabled = !gameStarted;
+      resetBtn.disabled = !gameStarted;
+
+      boardEl.innerHTML = "";
+
+      for (let i = 0; i < BOARD_SIZE; i++) {
+        const lineH = document.createElement("div");
+        lineH.className = "grid-line h";
+        lineH.style.top = `${10 + i * 20}%`;
+        boardEl.appendChild(lineH);
+
+        const lineV = document.createElement("div");
+        lineV.className = "grid-line v";
+        lineV.style.left = `${10 + i * 20}%`;
+        boardEl.appendChild(lineV);
+      }
+
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          const left = `${10 + col * 20}%`;
+          const top = `${10 + row * 20}%`;
+
+          const mark = document.createElement("div");
+          mark.className = "intersection-mark";
+          mark.style.left = left;
+          mark.style.top = top;
+          boardEl.appendChild(mark);
+
+          const point = document.createElement("button");
+          point.className = "point";
+          point.type = "button";
+          point.setAttribute("aria-label", `Play at ${coordName(row, col)}`);
+          point.style.left = left;
+          point.style.top = top;
+          point.disabled = !gameStarted || state.gameOver || state.board[row][col] !== EMPTY || (isOnlineMode() && state.currentPlayer !== state.humanColor);
+          point.addEventListener("click", () => sendMove(row, col));
+          boardEl.appendChild(point);
+
+          if (state.board[row][col] !== EMPTY) {
+            const stone = document.createElement("div");
+            stone.className = `stone ${state.board[row][col] === BLACK ? "black" : "white"}`;
+            stone.style.left = left;
+            stone.style.top = top;
+            boardEl.appendChild(stone);
+          }
+        }
+      }
+    }
+
+    function applyLocalMove(row, col) {
+      if (!gameStarted || state.gameOver) return { error: "The game is over." };
+      if (state.board[row][col] !== EMPTY) return { error: "That intersection is already occupied." };
+
+      const player = state.currentPlayer;
+      const nextBoard = cloneBoard(state.board);
+      const boardBefore = cloneBoard(state.board);
+      nextBoard[row][col] = player;
+
+      const captured = resolveCaptures(nextBoard, row, col, player);
+      for (const [cr, cc] of captured) {
+        nextBoard[cr][cc] = EMPTY;
+      }
+
+      const { group, hasLiberty } = getGroup(nextBoard, row, col);
+      if (!hasLiberty) {
+        return { error: "Illegal move: suicide is not allowed." };
+      }
+
+      if (state.previousBoard && boardsEqual(nextBoard, state.previousBoard)) {
+        return { error: "Illegal move: ko rule violation." };
+      }
+
+      const nextState = {
+        ...state,
+        history: [
+          ...state.history,
+          {
+            board: boardBefore,
+            previousBoard: state.previousBoard ? cloneBoard(state.previousBoard) : null,
+            currentPlayer: state.currentPlayer,
+            moveCounter: state.moveCounter,
+            capturedBlack: state.capturedBlack,
+            capturedWhite: state.capturedWhite,
+            gameOver: state.gameOver,
+            lastMove: state.lastMove,
+            resultText: state.resultText,
+            blackScore: state.blackScore,
+            whiteScore: state.whiteScore,
+          },
+        ],
+        previousBoard: boardBefore,
+        board: nextBoard,
+        currentPlayer: opposite(player),
+        moveCounter: state.moveCounter + 1,
+        lastMove: `${playerName(player)} at ${coordName(row, col)}`,
+        resultText: `${playerName(player)} played ${coordName(row, col)}${captured.length ? ` and captured ${captured.length}` : ""}.`,
+      };
+
+      if (player === BLACK) {
+        nextState.capturedWhite += captured.length;
+      } else {
+        nextState.capturedBlack += captured.length;
+      }
+
+      state = nextState;
+
+      if (state.moveCounter >= MAX_MOVES) {
+        finishGame();
+      }
+
+      return { ok: true };
+    }
+
+    async function fetchJson(url, payload) {
+      const response = await fetch(`${API_BASE}${url}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload || {}),
+      });
+      return await response.json();
+    }
+
+    function applyState(nextState) {
+      state = {
+        ...state,
+        ...nextState,
+      };
+      gameStarted = true;
+      updateUI();
+    }
+
+    function startSoloGame() {
+      state = makeInitialState();
+      state.mode = "solo";
+      state.resultText = "Solo mode started. Black to move.";
+      gameStarted = true;
+      showEndModal(false);
+      showStartModal(false);
+      setMessage("Solo mode started. Play both colors locally in the browser.");
+      updateUI();
+    }
+
+    async function startAIGame(humanColor) {
+      try {
+        state = makeInitialState();
+        const nextState = await fetchJson("/api/start", { humanColor });
+        state.mode = "online";
+        state.humanColor = humanColor;
+        state.aiColor = humanColor === BLACK ? WHITE : BLACK;
+        applyState(nextState);
+        state.mode = "online";
+        state.humanColor = humanColor;
+        state.aiColor = humanColor === BLACK ? WHITE : BLACK;
+        showEndModal(false);
+        showStartModal(false);
+        setMessage(humanColor === BLACK ? "You are Black. Make your first move." : "You are White. The AI has opened the game.");
+        updateUI();
+      } catch (error) {
+        setMessage("Could not start the AI game. Try Solo mode, or start the Python server.");
+      }
+    }
+
+    async function sendMove(row, col) {
+      if (!gameStarted) return;
+
+      if (isOnlineMode()) {
+        try {
+          const nextState = await fetchJson("/api/move", { row, col });
+          if (nextState.error) {
+            setMessage(nextState.error);
+          } else {
+            setMessage(nextState.lastMove ? `${nextState.lastMove}.` : "Move applied.");
+          }
+          applyState(nextState);
+        } catch (error) {
+          setMessage("Move request failed. Check that the Python backend is running.");
+        }
+        return;
+      }
+
+      const result = applyLocalMove(row, col);
+      if (result.error) {
+        setMessage(result.error);
+      } else {
+        setMessage(state.resultText);
+        updateUI();
+      }
+    }
+
+    async function undoMove() {
+      if (!gameStarted) return;
+
+      if (isOnlineMode()) {
+        try {
+          const nextState = await fetchJson("/api/undo", {});
+          applyState(nextState);
+          setMessage("Undid the last move.");
+        } catch (error) {
+          setMessage("Undo failed.");
+        }
+        return;
+      }
+
+      const prev = state.history.pop();
+      if (!prev) {
+        setMessage("Nothing to undo.");
+        updateUI();
+        return;
+      }
+
+      state = {
+        ...state,
+        ...prev,
+        history: state.history,
+      };
+      gameStarted = true;
+      setMessage("Undid the last move.");
+      updateUI();
+    }
+
+    async function resetGame() {
+      if (!gameStarted) return;
+
+      if (isOnlineMode()) {
+        try {
+          const nextState = await fetchJson("/api/reset", {});
+          applyState(nextState);
+          setMessage("Game reset.");
+        } catch (error) {
+          setMessage("Reset failed.");
+        }
+        return;
+      }
+
+      const mode = state.mode;
+      const humanColor = state.humanColor;
+      state = makeInitialState();
+      state.mode = mode;
+      state.humanColor = humanColor;
+      state.aiColor = null;
+      state.resultText = mode === "solo" ? "Solo mode reset. Black to move." : "Game reset.";
+      gameStarted = true;
+      showEndModal(false);
+      setMessage(mode === "solo" ? "Solo mode reset." : "Game reset.");
+      updateUI();
+    }
+
+    function restartWithModeChoice() {
+      showEndModal(false);
+      state = makeInitialState();
+      gameStarted = false;
+      updateUI();
+      showStartModal(true);
+      setMessage("Choose a mode to begin.");
+    }
+
+    chooseBlack.addEventListener("click", () => startAIGame(BLACK));
+    chooseWhite.addEventListener("click", () => startAIGame(WHITE));
+    chooseSolo.addEventListener("click", startSoloGame);
+    undoBtn.addEventListener("click", undoMove);
+    resetBtn.addEventListener("click", resetGame);
+    playAgainBtn.addEventListener("click", restartWithModeChoice);
+    closeResultBtn.addEventListener("click", () => showEndModal(false));
+
+    updateUI();
+  </script>
+
 </body>
 </html>
-
